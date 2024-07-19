@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>three.js editor</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="icon" href="images/threeJsEditor.png" type="image/png">
+</head>
+<body>
+<div class="load-Btn-Wrapper">
+    <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+    <button id="loadButton" class="styled-button">Load Model</button>
+    <button id="clearButton" class="styled-button">Clear Scene</button>
+    <button id="loadEnvMapButton" class="styled-button">Load EnvMap</button>
+    <input id="envMapFile" type="file" multiple style="display: none" />
+    <button id="loadMapButton" class="styled-button hidedElement">Load Map</button>
+    <input type="file" id="mapInput" accept="image/*" style="display: none;">
+
+    <button id="loadNormalMapButton" class="styled-button hidedElement">Load Normal Map</button>
+    <input type="file" id="normalMapInput" accept="image/*" style="display: none;">
+
+
+
+    <label for="colorInput" class="styled-label hidedElement">
+        <input type="color" id="colorInput" class="styled-input">
+    </label>
+
+    <label for="opacityInput" class="styled-label hidedElement">
+        Opacity:
+        <input type="range" id="opacityInput" min="0" max="1" step="0.01" value="1" class="styled-range">
+    </label>
+
+    <label for="metalnessInput" class="styled-label hidedElement">
+        Metalness:
+        <input type="range" id="metalnessInput" min="0" max="1" step="0.01" value="0" class="styled-range">
+    </label>
+    <label for="roughnessInput" class="styled-label hidedElement">
+        Roughness:
+        <input type="range" id="roughnessInput" min="0" max="1" step="0.01" value="0.5" class="styled-range">
+    </label>
+
+</div>
+<canvas class="webgl"></canvas>
+<script type="module" src="./script.js"></script>
+</body>
+</html>
