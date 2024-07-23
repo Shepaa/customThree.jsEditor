@@ -10,7 +10,11 @@
 <body>
 <div class="load-Btn-Wrapper">
     <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
-    <button id="loadButton" class="styled-button">Load Model</button>
+    <button id="loadButton" class="styled-button">Load Model in folder</button>
+
+    <input type="file" id="singleFileInput" accept=".glb,.gltf,.fbx" style="display: none;">
+    <button id="loadSingleFileButton" class="styled-button">Load Single File</button>
+
     <button id="clearButton" class="styled-button">Clear Scene</button>
     <button id="loadEnvMapButton" class="styled-button">Load EnvMap</button>
     <input id="envMapFile" type="file" multiple style="display: none" />

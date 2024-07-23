@@ -31,6 +31,31 @@ const loadButton = document.getElementById('loadButton');
 const loadEnvBtn = document.getElementById('loadEnvMapButton');
 const loadNormalMapBtn = document.querySelector('#loadNormalMapButton');
 const controlPanel = document.querySelector('.load-Btn-Wrapper');
+const loadSingleFileButton = document.getElementById('loadSingleFileButton');
+const singleFileInput = document.getElementById('singleFileInput');
+
+
+
+loadSingleFileButton.addEventListener('click', () => {
+  singleFileInput.click();
+});
+
+singleFileInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    if (['glb', 'gltf', 'fbx'].includes(fileExtension)) {
+      const url = URL.createObjectURL(file);
+      if (fileExtension === 'fbx') {
+        loadFBX(file, new Map([[file.name, url]]));
+      } else {
+        loadGLTF(file, new Map([[file.name, url]]));
+      }
+    } else {
+      console.error('Unsupported file format');
+    }
+  }
+});
 controlPanel.addEventListener('mousedown', (event) => {
   event.stopPropagation();
 });
@@ -409,10 +434,19 @@ scene.add(gridHelper);
  */
 
 // Lights
-const directionalLights = new THREE.DirectionalLight('#ffffff', 20);
-const ambientLights = new THREE.AmbientLight('#ffffff', 9);
-scene.add(ambientLights);
-scene.add(directionalLights);
+const directionalLight = new THREE.DirectionalLight('#ffffff', 1.5); // Уменьшена интенсивность
+directionalLight.position.set(5, 5, 5);
+directionalLight.castShadow = true; // Включаем отбрасывание теней
+scene.add(directionalLight);
+
+const ambientLight = new THREE.AmbientLight('#ffffff', 0.7); // Уменьшена интенсивность
+scene.add(ambientLight);
+
+// Добавляем дополнительный точечный свет
+const pointLight = new THREE.PointLight('#ffffff', 1.5);
+pointLight.position.set(-5, 5, -5);
+scene.add(pointLight);
+
 
 // Canvas
 const canvas = document.querySelector('canvas.webgl');
@@ -467,6 +501,10 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor('#363636');
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
