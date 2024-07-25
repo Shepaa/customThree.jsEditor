@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
-import GUI from 'lil-gui';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   EffectComposer,
@@ -11,134 +10,74 @@ import {
   TransformControls,
 } from 'three/examples/jsm/controls/TransformControls.js';
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js';
-import {log} from 'three/nodes';
-import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader.js';
+import {showElements} from './utilities/showElements.js';
+import {hideElements} from './utilities/hideElements.js';
+import {disposeMaterial} from './utilities/disposeMaterial.js';
+import {
+  clearButton,
+  colorInput,
+  controlPanel, folderInput,
+  loadButton,
+  loadEnvBtn,
+  loadEnvInput, loadMapButton,
+  loadNormalMapBtn,
+  loadNormalMapInput,
+  loadSingleFileButton, mapInput, metalnessInput, opacityInput, roughnessInput,
+  singleFileInput,
+} from './utilities/buttons/index.js';
+import {
+  ambientLight,
+  directionalLight,
+  pointLight,
+} from './utilities/lights.js';
+import {addModelToScene} from './utilities/addModelToScene.js';
+import {singleFileInputFunc} from './utilities/singleFileInputFunc.js';
+import {loadNormalMapBtnFunc} from './utilities/loadNormalMapBtnFunc.js';
+import {loadNormalMapInputFunc} from './utilities/loadNormalMapInputFunc.js';
+import {
+  setupEnvironmentMapLoader,
+} from './utilities/setupEnvironmentMapLoader.js';
+import {resize} from './utilities/resize.js';
+import {sizes} from './utilities/sizes.js';
+import {handleFolderSelect} from './utilities/handleFolderSelect.js';
+import {mapInputFunc} from './utilities/mapInputFunc.js';
+import {opacityInputFunc} from './utilities/opacityInputFunc.js';
+import {colorInputFunc} from './utilities/colorInputFunc.js';
+import {camera} from './utilities/camera.js';
+import {gridHelper} from './utilities/gridHelper.js';
+import {clearLoadedModels} from './utilities/clearLoadedModels.js';
+import {normalizeModelSize} from './utilities/normalizeModelSize.js';
 
 let activeMesh = null;
-const rgbeLoader = new RGBELoader();
-
-const clearButton = document.getElementById('clearButton');
-const colorInput = document.querySelector('#colorInput');
-const opacityInput = document.querySelector('#opacityInput');
-const metalnessInput = document.querySelector('#metalnessInput');
-const roughnessInput = document.querySelector('#roughnessInput');
-const loadNormalMapInput = document.querySelector('#normalMapInput');
-const mapInput = document.getElementById('mapInput');
-const loadEnvInput = document.getElementById('envMapFile');
-const folderInput = document.getElementById('folderInput');
-const loadMapButton = document.getElementById('loadMapButton');
-const loadButton = document.getElementById('loadButton');
-const loadEnvBtn = document.getElementById('loadEnvMapButton');
-const loadNormalMapBtn = document.querySelector('#loadNormalMapButton');
-const controlPanel = document.querySelector('.load-Btn-Wrapper');
-const loadSingleFileButton = document.getElementById('loadSingleFileButton');
-const singleFileInput = document.getElementById('singleFileInput');
-
-
+let models = [];
+const canvas = document.querySelector('canvas.webgl');
+const scene = new THREE.Scene();
+let fileMap = new Map();
 
 loadSingleFileButton.addEventListener('click', () => {
   singleFileInput.click();
 });
 
-singleFileInput.addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (file) {
-    const fileExtension = file.name.split('.').pop().toLowerCase();
-    if (['glb', 'gltf', 'fbx'].includes(fileExtension)) {
-      const url = URL.createObjectURL(file);
-      if (fileExtension === 'fbx') {
-        loadFBX(file, new Map([[file.name, url]]));
-      } else {
-        loadGLTF(file, new Map([[file.name, url]]));
-      }
-    } else {
-      console.error('Unsupported file format');
-    }
-  }
-});
+singleFileInput.addEventListener('change',
+    (event) => singleFileInputFunc(event, loadFBX, loadGLTF));
 controlPanel.addEventListener('mousedown', (event) => {
   event.stopPropagation();
 });
 controlPanel.addEventListener('click', (event) => {
   event.stopPropagation();
 });
-let fileMap = new Map();
-
-loadNormalMapBtn.addEventListener('click', (event) => {
-  event.preventDefault();
-  loadNormalMapInput.value = ''; // Сбросить предыдущий выбор файла
-  loadNormalMapInput.click();
-});
-loadNormalMapInput.addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (file && activeMesh) {
-    const url = URL.createObjectURL(file);
-    console.log(url);
-    new THREE.TextureLoader().load(url, (texture) => {
-      console.log('Текстура загружена:', texture);
-      activeMesh.material.normalMap = texture;
-      console.log('Текстура применена:', activeMesh.material.normalMap);
-      activeMesh.material.needsUpdate = true;
-    });
-  } else {
-    console.log('no mesh found');
-  }
-});
+loadNormalMapBtn.addEventListener('click',
+    (event) => loadNormalMapBtnFunc(event));
+loadNormalMapInput.addEventListener('change',
+    (event) => { loadNormalMapInputFunc(event, activeMesh);});
 
 loadEnvBtn.addEventListener('click', () => {
-  loadEnvInput.value = ''; // Сбросить предыдущий выбор файла
+  loadEnvInput.value = '';
   loadEnvInput.click();
 });
 
-loadEnvInput.addEventListener('change', (event) => {
-  console.log('EnvMap file selection started');
-
-  if (event.target.files.length === 0) {
-    console.log('No file selected');
-    return;
-  }
-
-  const files = Array.from(event.target.files);
-  const singleFile = files.find(
-      file => file.name.match(/\.(hdr|jpeg|jpg|png)$/i),
-  );
-
-  if (!singleFile) {
-    console.log('No valid file selected');
-    return;
-  }
-
-  console.log('Selected file:', singleFile.name);
-
-  const url = URL.createObjectURL(singleFile);
-
-  if (singleFile.name.match(/\.hdr$/i)) {
-    rgbeLoader.load(url,
-        (environmentMap) => {
-          environmentMap.mapping = THREE.EquirectangularReflectionMapping;
-          applyEnvironmentMap(environmentMap);
-          console.log('Loaded HDR file');
-        },
-        undefined,
-        (error) => {
-          console.error('Error loading HDR:', error);
-        },
-    );
-  } else {
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.load(url,
-        (environmentMap) => {
-          environmentMap.mapping = THREE.EquirectangularReflectionMapping;
-          applyEnvironmentMap(environmentMap);
-          console.log('Loaded texture');
-        },
-        undefined,
-        (error) => {
-          console.error('Error loading texture:', error);
-        },
-    );
-  }
-});
+loadEnvInput.addEventListener('change',
+    (event) => setupEnvironmentMapLoader(event, applyEnvironmentMap));
 
 function applyEnvironmentMap(envMap) {
   scene.background = envMap;
@@ -153,33 +92,8 @@ function applyEnvironmentMap(envMap) {
 loadButton.addEventListener('click', () => {
   folderInput.click();
 });
-
-folderInput.addEventListener('change', handleFolderSelect);
-
-function handleFolderSelect(event) {
-  const files = Array.from(event.target.files);
-  const gltfFile = files.find(
-      file => file.name.toLowerCase().endsWith('.gltf') ||
-          file.name.toLowerCase().endsWith('.glb'));
-  const fbxFile = files.find(file => file.name.toLowerCase().endsWith('.fbx'));
-
-  if (!gltfFile && !fbxFile) {
-    console.error('GLTF/GLB или FBX файл не найден в выбранной папке');
-    return;
-  }
-
-  fileMap.clear();
-  files.forEach(file => {
-    const blobURL = URL.createObjectURL(file);
-    fileMap.set(file.name, blobURL);
-  });
-
-  if (gltfFile) {
-    loadGLTF(gltfFile, fileMap);
-  } else if (fbxFile) {
-    loadFBX(fbxFile, fileMap);
-  }
-}
+folderInput.addEventListener('change',
+    (event) => handleFolderSelect(event, fileMap, loadGLTF, loadFBX));
 
 function loadGLTF(gltfFile, fileMap) {
   const manager = new THREE.LoadingManager();
@@ -224,7 +138,7 @@ function loadGLTF(gltfFile, fileMap) {
       }
     });
 
-    addModelToScene(gltf.scene);
+    addModelToScene(gltf.scene, normalizeModelSize, scene, models);
   }, undefined, (error) => {
     console.error('Ошибка при загрузке GLTF файла:', error);
   });
@@ -267,7 +181,7 @@ function loadFBX(fbxFile, fileMap) {
       }
     });
 
-    addModelToScene(object);
+    addModelToScene(object, normalizeModelSize, scene, models);
   }, (xhr) => {
     console.log((xhr.loaded / xhr.total * 100) + '% загружено');
   }, (error) => {
@@ -279,48 +193,15 @@ loadMapButton.addEventListener('click', () => {
   mapInput.click();
 });
 
-mapInput.addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (file && activeMesh) {
-    const url = URL.createObjectURL(file);
-    console.log(url);
-    new THREE.TextureLoader().load(url, (texture) => {
-      activeMesh.material.needsUpdate = true;
-      activeMesh.material.map = texture;
-      console.log(texture);
-      console.log("Текстура поменялась");
-    });
-  } else {
-    console.log('no mesh found');
-  }
-});
-let models = [];
+mapInput.addEventListener('change', (event) => mapInputFunc(event, activeMesh));
 
-const scene = new THREE.Scene();
 
 opacityInput.addEventListener('click', function(event) {
   event.stopPropagation();
 });
 
 opacityInput.addEventListener('input', function() {
-  const newOpacity = parseFloat(this.value);
-  console.log('Выбранная прозрачность:', newOpacity);
-
-  if (activeMesh) {
-    activeMesh.traverse((child) => {
-      if (child.isMesh) {
-        if (Array.isArray(child.material)) {
-          child.material.forEach(material => {
-            material.opacity = newOpacity;
-            material.transparent = newOpacity < 1;
-          });
-        } else {
-          child.material.opacity = newOpacity;
-          child.material.transparent = newOpacity < 1;
-        }
-      }
-    });
-  }
+  opacityInputFunc(activeMesh, this.value);
 });
 
 colorInput.addEventListener('click', function(event) {
@@ -328,13 +209,7 @@ colorInput.addEventListener('click', function(event) {
 });
 
 colorInput.addEventListener('input', function() {
-  if (activeMesh) {
-    const newColor = this.value;
-    console.log('Выбранный цвет:', newColor);
-    activeMesh.material.color.setHex(parseInt(newColor.substr(1), 16));
-  } else {
-    console.log('You didn\'t chose any meshes');
-  }
+  colorInputFunc(activeMesh, this.value);
 });
 
 function setupMaterialControl(input, property) {
@@ -369,132 +244,22 @@ function setupMaterialControl(input, property) {
 setupMaterialControl(metalnessInput, 'metalness');
 setupMaterialControl(roughnessInput, 'roughness');
 
-function normalizeModelSize(model, targetSize = 1) {
-  const box = new THREE.Box3().setFromObject(model);
-  const size = box.getSize(new THREE.Vector3());
-  const maxDimension = Math.max(size.x, size.y, size.z);
-  const scale = targetSize / maxDimension;
-  model.scale.multiplyScalar(scale);
-}
-
-function addModelToScene(model) {
-  normalizeModelSize(model, 2);
-  scene.add(model);
-  console.log('Model has been added');
-  models.push(model);
-}
-
-// Функция для удаления всех загруженных моделей
-function clearLoadedModels() {
-  models.forEach(model => {
-    scene.remove(model);
-    model.traverse((child) => {
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) {
-        if (Array.isArray(child.material)) {
-          child.material.forEach(disposeMaterial);
-        } else {
-          disposeMaterial(child.material);
-        }
-      }
-    });
-  });
-  models = [];
-  activeMesh = null;
-  transformControls.detach();
-  THREE.Cache.clear();
-
-  // Очистка Blob URL
-  fileMap.forEach(url => URL.revokeObjectURL(url));
-  fileMap.clear();
-  hideElements()
-}
-
-function disposeMaterial(material) {
-  Object.keys(material).forEach(prop => {
-    if (!material[prop]) return;
-    if (material[prop] !== null && typeof material[prop].dispose ===
-        'function') {
-      material[prop].dispose();
-    }
-  });
-  material.dispose();
-}
-
-// Обработчик события для кнопки очистки
-clearButton.addEventListener('click', clearLoadedModels);
-
-const gridHelper = new THREE.GridHelper(10, 20);
-gridHelper.rotation.y = 0.7796;
-gridHelper.userData.ignoreRaycast = true; // Добавьте эту строку
+clearButton.addEventListener('click',
+    () => clearLoadedModels(models, scene, activeMesh, transformControls,
+        fileMap));
 scene.add(gridHelper);
-
-/**
- * Base
- */
-
-// Lights
-const directionalLight = new THREE.DirectionalLight('#ffffff', 1.5); // Уменьшена интенсивность
-directionalLight.position.set(5, 5, 5);
-directionalLight.castShadow = true; // Включаем отбрасывание теней
 scene.add(directionalLight);
-
-const ambientLight = new THREE.AmbientLight('#ffffff', 0.7); // Уменьшена интенсивность
 scene.add(ambientLight);
-
-// Добавляем дополнительный точечный свет
-const pointLight = new THREE.PointLight('#ffffff', 1.5);
-pointLight.position.set(-5, 5, -5);
 scene.add(pointLight);
 
-
-// Canvas
-const canvas = document.querySelector('canvas.webgl');
-
-/**
- * Sizes
- */
-const sizes = {
-  width: window.innerWidth,
-  height: window.innerHeight,
-};
-
 window.addEventListener('resize', () => {
-  // Update sizes
-  sizes.width = window.innerWidth;
-  sizes.height = window.innerHeight;
-
-  // Update camera
-  camera.aspect = sizes.width / sizes.height;
-  camera.updateProjectionMatrix();
-
-  // Update renderer
-  renderer.setSize(sizes.width - 240, sizes.height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-  // Update composer
-  composer.setSize(sizes.width, sizes.height);
-  outlinePass.resolution.set(sizes.width, sizes.height);
+  resize(sizes, camera, renderer, composer, outlinePass);
 });
-
-/**
- * Camera
- */
-// Base camera
-const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1,
-    100);
-camera.position.x = 4;
-camera.position.y = 8;
-camera.position.z = 4;
 scene.add(camera);
 
-// Controls
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 
-/**
- * Renderer
- */
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
 });
@@ -503,8 +268,6 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor('#363636');
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -524,83 +287,44 @@ outlinePass.visibleEdgeColor.set('#ffffff');
 outlinePass.hiddenEdgeColor.set('#190a05');
 composer.addPass(outlinePass);
 
-// TransformControls
 const transformControls = new TransformControls(camera, canvas);
-transformControls.addEventListener('dragging-changed', function(event) {
+transformControls.addEventListener('dragging-changed', (event) => {
   controls.enabled = !event.value;
 });
-// scene.add(transformControls);
 
-// Обработчик клика
 window.addEventListener('click', onMouseClick, false);
 
-// Добавляем функции для показа и скрытия элементов
-function showElements() {
-  document.querySelectorAll('.hidedElement').forEach((element) => {
-    element.style.display = 'block';
-  });
-}
-
-function hideElements() {
-  document.querySelectorAll('.hidedElement').forEach((element) => {
-    element.style.display = 'none';
-  });
-}
 function onMouseClick(event) {
-  // Вычисляем положение мыши в нормализованных координатах устройства (-1 to +1) для обоих компонентов
   mouse.x = (event.clientX / sizes.width) * 2 - 1;
   mouse.y = -(event.clientY / sizes.height) * 2 + 1;
-
-  // Обновляем луч с помощью позиции мыши и камеры
   raycaster.setFromCamera(mouse, camera);
-
-  // Вычисляем объекты, пересекающиеся с лучом
   const intersects = raycaster.intersectObjects(scene.children, true).
   filter(intersect => !intersect.object.userData.ignoreRaycast);
 
   if (intersects.length > 0) {
-    // Получаем первый пересеченный объект (ближайший к камере)
     const object = intersects[0].object;
-
-    // Устанавливаем активный меш
     activeMesh = object;
     activeMesh = activeMesh;
-
-    // Обновляем контур
     outlinePass.selectedObjects = [activeMesh];
     scene.add(transformControls);
     transformControls.attach(activeMesh);
-    showElements();
+    showElements('.hidedElement');
   } else {
-    // Если клик был не по объекту, сбрасываем активный меш
     activeMesh = null;
     activeMesh = null;
     outlinePass.selectedObjects = [];
     transformControls.detach();
-    hideElements();
+    hideElements('.hidedElement');
   }
 }
 
-/**
- * Animate
- */
-const clock = new THREE.Clock();
-
 const tick = () => {
-  const elapsedTime = clock.getElapsedTime();
-
   if (activeMesh && outlinePass.selectedObjects.length === 0) {
     outlinePass.selectedObjects = [activeMesh];
     transformControls.attach(activeMesh);
   }
-
-  // Update controls
   controls.update();
-
-  // Render
   composer.render();
-
-  // Call tick again on the next frame
   window.requestAnimationFrame(tick);
 };
 
